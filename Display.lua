@@ -445,7 +445,6 @@ function WarpDeplete:UpdateTimerDisplay()
   state.timerText = Util.formatTime_OnUpdate(self.timerState.current) ..
     " / " .. Util.formatTime_OnUpdate(self.timerState.limit)
 
-
   if self.challengeState.challengeCompleted then
     local blizzardTime = select(3, C_ChallengeMode.GetCompletionInfo())
     local blizzardTimeText = ''
@@ -506,6 +505,7 @@ function WarpDeplete:SetForcesTotal(totalCount)
 
   self.forcesState.completed = false
   self.forcesState.completedTime = 0
+
   self:UpdateForcesDisplay()
 end
 
@@ -527,7 +527,15 @@ function WarpDeplete:SetForcesCurrent(currentCount)
     self.forcesState.completedTime = self.timerState.current
   end
 
-  self.forcesState.currentCount = currentCount
+  -- The current count can only ever go up. The only place where it should
+  -- ever decrease is when it's reset in ResetState.
+  -- It seems that the API reports a current count of 0 when the dungeon is
+  -- finished, but possibly right before the challengeCompleted flag is triggered.
+  -- So, to make sure we don't reset the bar to 0 in that case, we only allow
+  -- the count to go up here.
+  if currentCount >= self.forcesState.currentCount then
+    self.forcesState.currentCount = currentCount
+  end
 
   local currentPercent = self.forcesState.totalCount > 0
     and self.forcesState.currentCount / self.forcesState.totalCount or 0
@@ -539,14 +547,28 @@ function WarpDeplete:SetForcesCurrent(currentCount)
 end
 
 function WarpDeplete:UpdateForcesDisplay()
-  -- clamp pull progress so that the bar won't exceed 100%
-  local pullPercent = self.forcesState.pullPercent
-  if self.forcesState.pullPercent + self.forcesState.currentPercent > 1 then
-    pullPercent = 1 - self.forcesState.currentPercent
+  if self.challengeState.challengeCompleted then
+    self.forcesState.currentPercent = 1.0
+
+    if self.forcesState.currentCount < self.forcesState.totalCount then
+      self.forcesState.currentCount = self.forcesState.totalCount
+    end
   end
 
-  self.forces.overlayBar:SetValue(pullPercent - 0.005)
+  if self.forcesState.currentPercent < 1.0 then
+    -- clamp pull progress so that the bar won't exceed 100%
+    local pullPercent = self.forcesState.pullPercent
+    if self.forcesState.pullPercent + self.forcesState.currentPercent > 1.0 then
+      pullPercent = 1 - self.forcesState.currentPercent
+    end
+
+    self.forces.overlayBar:SetValue(pullPercent - 0.005)
+  else
+    self.forces.overlayBar:SetValue(0)
+  end
+
   self.forces.overlayBar:SetPoint("LEFT", 1 + self.db.profile.barWidth * self.forcesState.currentPercent, 0)
+
   self.forces.bar:SetValue(self.forcesState.currentPercent)
 
   self.forces.text:SetText(
@@ -563,7 +585,7 @@ function WarpDeplete:UpdateForcesDisplay()
       self.forcesState.completed and self.forcesState.completedTime or nil
     )
   )
-  self:UpdateGlow() 
+  self:UpdateGlow()
 end
 
 function WarpDeplete:UpdateGlowAppearance()
@@ -575,13 +597,14 @@ function WarpDeplete:UpdateGlowAppearance()
   self:HideGlow()
   self:ShowGlow()
 end
-  
+
 function WarpDeplete:UpdateGlow()
   if self.forcesState.glowActive and (
     self.challengeState.challengeCompleted or
     self.forcesState.completed
   ) then
     self:HideGlow()
+    return
   end
 
   local percentBeforePull = self.forcesState.currentPercent
