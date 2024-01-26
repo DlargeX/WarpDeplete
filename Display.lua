@@ -261,16 +261,43 @@ function WarpDeplete:UpdateLayout()
   keyText:ClearAllPoints()
   keyDetailsText:ClearAllPoints()
 
-  if alignRight then
-    keyDetailsText:SetPoint("TOPRIGHT", -framePadding - 3, -currentOffset)
-    keyText:SetPoint("TOPRIGHT", keyDetailsText, "LEFT", -2, (keyFontSize - keyDetailsFontSize) + 6)
+  -- Find out which one is bigger, we'll position the other one according to that
+  local keyTextHeight = keyText:GetStringHeight()
+  local keyDetailsTextHeight = keyDetailsText:GetStringHeight()
+  local keyRowHeight = math.max(keyTextHeight, keyDetailsTextHeight)
+
+  -- Basically, whenever we're right aligned we're absolutely positioning the keyDetails,
+  -- and when we're left aligned it's the key level. Then the other one is attached
+  -- to the left/right.
+  -- This makes the vertical centering a bit messy, since we need to get the offset
+  -- between the two (larger - smaller) / 2 and then shift the smaller one by that amount
+  -- compared to the larger one, which changes depending on alignment.
+  -- Note that what the element that was smaller (and thus offset) is the anchor, we need
+  -- to subtract the anchor again from the bigger element to cancel it out.
+  -- Also, all offsets are negative, as usual.
+  if keyTextHeight >= keyDetailsTextHeight then
+    local offset = (keyTextHeight - keyDetailsTextHeight) / 2
+
+    if alignRight then
+      keyDetailsText:SetPoint("TOPRIGHT", -framePadding - 3, -currentOffset - offset - 1)
+      keyText:SetPoint("TOPRIGHT", keyDetailsText, "TOPLEFT", -3, offset)
+    else
+      keyText:SetPoint("TOPLEFT", framePadding, -currentOffset)
+      keyDetailsText:SetPoint("TOPLEFT", keyText, "TOPRIGHT", 3, -offset - 1)
+    end
   else
-    keyText:SetPoint("TOPLEFT", framePadding + 3, -currentOffset)
-    keyDetailsText:SetPoint("TOPLEFT", keyText, "RIGHT", 2, (keyFontSize - keyDetailsFontSize) + 4)
+    local offset = (keyDetailsTextHeight - keyTextHeight) / 2
+
+    if alignRight then
+      keyDetailsText:SetPoint("TOPRIGHT", -framePadding - 3, -currentOffset - 1)
+      keyText:SetPoint("TOPRIGHT", keyDetailsText, "TOPLEFT", -3, -offset)
+    else
+      keyText:SetPoint("TOPLEFT", framePadding, -currentOffset - offset)
+      keyDetailsText:SetPoint("TOPLEFT", keyText, "TOPRIGHT", 3, offset - 1)
+    end
   end
 
-  local keyRowHeight = math.max(keyText:GetStringHeight(), keyDetailsText:GetStringHeight())
-  currentOffset = currentOffset + keyRowHeight + verticalOffset + barFramePaddingTop
+  currentOffset = currentOffset + keyRowHeight + verticalOffset + barFramePaddingTop + 1
 
   -- Bars frame
   self.frames.bars:SetWidth(barWidth)
