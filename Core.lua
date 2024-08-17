@@ -77,6 +77,12 @@ function WarpDeplete:OnInitialize()
   frames.bars = CreateFrame("Frame", "WarpDepleteBars", frames.root)
   frames.deathsTooltip = CreateFrame("Frame", "WarpDepleteDeathsTooltip", frames.root)
 
+  -- We use an empty frame to which we parent the blizzard objective tracker.
+  -- This can then be hidden and not be affected by blizzard unhiding the
+  -- objective tracker itself.
+  frames.hiddenObjectiveTrackerParent = CreateFrame("frame")
+  frames.hiddenObjectiveTrackerParent:Hide()
+
   self.frames = frames
 end
 
@@ -199,31 +205,25 @@ end
 function WarpDeplete:ShowBlizzardObjectiveTracker()
   -- As SylingTracker replaces the blizzard objective tracker in hiding
   -- it, we prevent WarpDeplete to reshown the tracker.
-  if C_AddOns.IsAddOnLoaded("SylingTracker") then 
-    return 
+  if C_AddOns.IsAddOnLoaded("SylingTracker") then
+    return
   end
 
-  ObjectiveTrackerFrame:Show()
+  -- FIXME(happens): See HideBlizzardObjectiveTracker
+  ObjectiveTrackerFrame:SetAlpha(1)
+
+  if ObjectiveTrackerFrame:GetParent() == self.frames.hiddenObjectiveTrackerParent then
+    ObjectiveTrackerFrame:SetParent(self.originalObjectiveTrackerParent or UIParent)
+  end
 end
 
 function WarpDeplete:HideBlizzardObjectiveTracker()
-  ObjectiveTrackerFrame:Hide()
+  -- FIXME(happens): The reparenting method seems to not work for some people.
+  -- As an additional fallback, we set the alpha to 0.
+  ObjectiveTrackerFrame:SetAlpha(0)
 
-  -- Sometimes, the objective tracker isn't hidden
-  -- correctly. This can happen when WarpDeplete is
-  -- loaded before the blizzard dungeon timer.
-  -- In this case, we can to check again after a bit
-  -- to make sure we're actually hiding it.
-  C_Timer.After(1, function()
-    -- Check if we're still showing WDP
-    if not self.isShown then
-      self:PrintDebug("Skipping re-hiding objective frame, wdp closed")
-      return
-    end
-
-    self:PrintDebug("Re-hiding objective frame")
-    ObjectiveTrackerFrame:Hide()
-  end)
+  self.originalObjectiveTrackerParent = ObjectiveTrackerFrame:GetParent()
+  ObjectiveTrackerFrame:SetParent(self.frames.hiddenObjectiveTrackerParent)
 end
 
 function WarpDeplete:ShowExternals()

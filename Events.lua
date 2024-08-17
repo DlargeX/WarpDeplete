@@ -185,6 +185,7 @@ function WarpDeplete:GetObjectivesInfo()
     if not name then break end
 
     name = gsub(name, " defeated", "")
+    name = gsub(name, " Defeated", "")
     self:PrintDebug("Got boss name for index " .. i .. ": " .. tostring(name))
     objectives[i] = { name = name, time = completed and 0 or nil }
   end
@@ -427,7 +428,7 @@ function WarpDeplete:UnregisterChallengeEvents()
   self:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 end
 
-function WarpDeplete:OnTimerTick(elapsed) 
+function WarpDeplete:OnTimerTick(elapsed)
   if not self.challengeState.inChallenge or
     self.challengeState.challengeCompleted or
     not self.timerState.running then
@@ -448,8 +449,6 @@ function WarpDeplete:OnTimerTick(elapsed)
 
   local deathPenalty = self.timerState.deaths * 5
   local current = GetTime() + self.timerState.startOffset - self.timerState.startTime + deathPenalty
-
-  -- if current < 0 then return end
 
   self:SetTimerCurrent(current)
 end
@@ -481,9 +480,6 @@ function WarpDeplete:OnPlayerDead(ev)
   -- good method for deduping though.
   -- self:BroadcastDeath()
   self:ResetCurrentPull()
-  -- Blizzard re-shows the objective tracker every time the player
-  -- dies, so we need to re-hide it
-  self:HideBlizzardObjectiveTracker()
 end
 
 function WarpDeplete:OnChallengeModeReset(ev)
@@ -552,7 +548,6 @@ end
 function WarpDeplete:OnResetCurrentPull(ev)
   self:PrintDebugEvent(ev)
   self:ResetCurrentPull()
-  self:HideBlizzardObjectiveTracker()
 end
 
 function WarpDeplete:OnThreatListUpdate(ev, unit)
