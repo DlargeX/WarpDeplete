@@ -113,7 +113,7 @@ function WarpDeplete:GetTimerInfo()
     C_Timer.After(0.5, function() 
       local current = select(2, GetWorldElapsedTime(1))
       local deaths = C_ChallengeMode.GetDeathCount()
-      local trueTime = current - deaths * 5
+      local trueTime = current - deaths * self.keyDetailsState.deathPenalty
       self.timerState.startOffset = trueTime
       self.timerState.startTime = GetTime()
       self.timerState.isBlizzardTimer = true
@@ -127,6 +127,37 @@ function WarpDeplete:GetTimerInfo()
   return true
 end
 
+-- TODO(happens): Add missing locales
+local affixNameFilters = {
+  ["enUS"] = {"Xal'atath's", "Challenger's", "Bargain:"},
+  ["deDE"] = {"Xal'ataths", "des Herausforderers", "Handel:"},
+  ["frFR"] = {},
+  ["itIT"] = {},
+  ["koKR"] = {},
+  ["zhCN"] = {},
+  ["zhTW"] = {},
+  ["ruRU"] = {},
+  ["esES"] = {},
+  ["esMX"] = {},
+  ["ptBR"] = {},
+}
+
+local locale = GetLocale()
+-- These should have the same names
+if locale == "enGB" then
+  locale = "enUS"
+end
+
+local function formatAffixName(name)
+  local result = name
+  local filters = affixNameFilters[locale] or {}
+  for _, filter in ipairs(filters) do
+    result = result:gsub(filter, "")
+  end
+
+  return result:match("^%s*(.-)%s*$")
+end
+
 function WarpDeplete:GetKeyInfo()
   self:PrintDebug("Getting key info")
 
@@ -134,10 +165,14 @@ function WarpDeplete:GetKeyInfo()
 
   local affixNames = {}
   local affixIds = {}
+  local deathPenalty = 5
   for i, affixID in ipairs(affixes) do
     local name = C_ChallengeMode.GetAffixInfo(affixID)
-    affixNames[i] = name
+    affixNames[i] = formatAffixName(name)
     affixIds[i] = affixID
+    if affixID == 152 then
+      deathPenalty = 15
+    end
   end
 
   if level <= 0 or #affixNames <= 0 then
@@ -145,35 +180,30 @@ function WarpDeplete:GetKeyInfo()
     return false
   end
 
-  self:SetKeyDetails(level or 0, affixNames, affixIds)
+  self:SetKeyDetails(level or 0, deathPenalty, affixNames, affixIds)
   return true
 end
 
 function WarpDeplete:GetObjectivesInfo()
   self:PrintDebug("Getting objectives info")
 
+  -- The last step is forces, all previous steps are bosses
   local stepCount = select(3, C_Scenario.GetStepInfo())
   if stepCount <= 0 then
     self:PrintDebug("No steps received, can't update objective info")
     return false
   end
 
-  local mdtTotalCount = self:GetMDTTotalCountInfo()
-  if mdtTotalCount then
-    self.forcesState.hasMDTTotalCount = true
-    self.forcesState.totalCount = mdtTotalCount
-  end
+  local currentCount, totalCount = self:GetEnemyForcesCount()
+  self:PrintDebug("Got forces info: " .. tonumber(currentCount) .. "/" .. tonumber(totalCount))
 
-  local currentPercent = self:GetEnemyForcesPercent()
-  -- The last step is forces, all previous steps are bosses
-  self:PrintDebug("Got forces info: " .. currentPercent .. "%")
-
-  if currentPercent == nil then
+  if currentCount == nil or totalCount == nil then
     self:PrintDebug("No mob count received")
     return false
   end
 
-  self:SetForcesPercent(currentPercent)
+  self:SetForcesTotal(totalCount)
+  self:SetForcesCurrent(currentCount)
 
   local objectives = {}
   for i = 1, stepCount - 1 do
@@ -184,8 +214,8 @@ function WarpDeplete:GetObjectivesInfo()
     local completed = CriteriaInfo.completed
     if not name then break end
 
-    name = gsub(name, " defeated", "")
-    name = gsub(name, " Defeated", "")
+    name = name:gsub(" defeated", "")
+    name = name:gsub(" Defeated", "")
     self:PrintDebug("Got boss name for index " .. i .. ": " .. tostring(name))
     objectives[i] = { name = name, time = completed and 0 or nil }
   end
@@ -199,60 +229,37 @@ function WarpDeplete:GetObjectivesInfo()
   return true
 end
 
-function WarpDeplete:GetMDTTotalCountInfo()
-  if not MDT then return nil end
-  local zoneId = C_Map.GetBestMapForUnit("player")
-  local mdtDungeonIdx = MDT.zoneIdToDungeonIdx[zoneId]
-
-  if not mdtDungeonIdx then
-    self:PrintDebug("No MDT dungeon index found for zoneId " .. zoneId)
-    return nil
-  end
-
-  local mdtDungeonCountInfo = MDT.dungeonTotalCount[mdtDungeonIdx]
-  if not mdtDungeonCountInfo then
-    self:PrintDebug("No MDT dungeon count found for dungeon index " .. mdtDungeonIdx)
-    return nil
-  end
-
-  self:PrintDebug("Got MDT total count: " .. mdtDungeonCountInfo.normal)
-  return mdtDungeonCountInfo.normal or nil
-end
-
-function WarpDeplete:GetEnemyForcesPercent()
+function WarpDeplete:GetEnemyForcesCount()
   local stepCount = select(3, C_Scenario.GetStepInfo())
-
   local CriteriaInfo = C_ScenarioInfo.GetCriteriaInfo(stepCount)
-  if not CriteriaInfo then return nil end
+  if not CriteriaInfo then return nil, nil end
 
-  -- NOTE(happens): Blizzard decided in 11.0 to not return count
-  -- anymore, but instead a percentage. This means the totalQuantity
-  -- is useless to us now.
-  -- local totalCount = CriteriaInfo.totalQuantity
+  local totalCount = CriteriaInfo.totalQuantity
+  local currentCountStr = CriteriaInfo.quantityString
+  if not currentCountStr or not totalCount then return nil, nil end
 
-  local mobPercentStr = CriteriaInfo.quantity
-  if not mobPercentStr then return nil end
+  -- NOTE(happens): The current count contains a percentage sign
+  -- even though it's an absolute value.
+  local currentCount = tonumber(currentCountStr:match("%d+"))
 
-  local currentPercentStr = gsub(mobPercentStr, "%%", "")
-  local currentPercent = tonumber(currentPercentStr)
-  return currentPercent
+  return currentCount, totalCount
 end
 
 function WarpDeplete:UpdateForces()
   if not self.challengeState.inChallenge then return end
 
-  local currentPercent = self:GetEnemyForcesPercent()
+  local currentCount, totalCount = self:GetEnemyForcesCount()
   -- This mostly happens when we have already completed the dungeon
-  if not currentPercent then return end
-  self:PrintDebug("currentPercent: " .. currentPercent)
+  if not currentCount or not totalCount then return end
+  self:PrintDebug("Count: " .. tostring(currentCount) .. "/" .. tostring(totalCount))
 
-  if currentPercent >= 100 and not self.forcesState.completed then
+  if currentCount >= totalCount and not self.forcesState.completed then
     -- If we just went above the total count (or matched it), we completed it just now
     self.forcesState.completed = true
     self.forcesState.completedTime = self.timerState.current
   end
 
-  self:SetForcesPercent(currentPercent)
+  self:SetForcesCurrent(currentCount)
 end
 
 function WarpDeplete:UpdateObjectives()
@@ -447,7 +454,7 @@ function WarpDeplete:OnTimerTick(elapsed)
     self:SetDeaths(newDeaths)
   end
 
-  local deathPenalty = self.timerState.deaths * 5
+  local deathPenalty = self.timerState.deaths * self.keyDetailsState.deathPenalty
   local current = GetTime() + self.timerState.startOffset - self.timerState.startTime + deathPenalty
 
   self:SetTimerCurrent(current)

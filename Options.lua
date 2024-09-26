@@ -681,15 +681,15 @@ function WarpDeplete:InitOptions()
       set = function(info, value) WarpDeplete:SetTimerRemaining(value * 60) end
     },
 
-    -- {
-    --   type = "range",
-    --   name = L["Forces total"],
-    --   min = 1,
-    --   max = 500,
-    --   step = 1,
-    --   get = function(info) return WarpDeplete.forcesState.totalCount end,
-    --   set = function(info, value) WarpDeplete:SetForcesTotal(value) end
-    -- },
+    {
+      type = "range",
+      name = L["Forces total"],
+      min = 1,
+      max = 500,
+      step = 1,
+      get = function(info) return WarpDeplete.forcesState.totalCount end,
+      set = function(info, value) WarpDeplete:SetForcesTotal(value) end
+    },
 
     {
       type = "range",
@@ -701,15 +701,15 @@ function WarpDeplete:InitOptions()
       set = function(info, value) WarpDeplete:SetForcesPull(value) end
     },
 
-    -- {
-    --   type = "range",
-    --   name = L["Forces current"],
-    --   min = 1,
-    --   max = 500,
-    --   step = 1,
-    --   get = function(info) return WarpDeplete.forcesState.currentCount end,
-    --   set = function(info, value) WarpDeplete:SetForcesCurrent(value) end
-    -- }
+    {
+      type = "range",
+      name = L["Forces current"],
+      min = 1,
+      max = 500,
+      step = 1,
+      get = function(info) return WarpDeplete.forcesState.currentCount end,
+      set = function(info, value) WarpDeplete:SetForcesCurrent(value) end
+    }
   })
 
   options.args.profile = LibStub("AceDBOptions-3.0"):GetOptionsTable(self.db)
@@ -741,7 +741,7 @@ function WarpDeplete:HandleChatCommand(input)
     self:PrintDebug("Offset: " .. self.timerState.startOffset .. ", " .. WarpDeplete.Util.formatTime(self.timerState.startOffset))
     self:PrintDebug("Start time: " .. self.timerState.startTime)
     self:PrintDebug("Deaths: " .. self.timerState.deaths)
-    local deathPenalty = self.timerState.deaths * 5
+    local deathPenalty = self.timerState.deaths * self.keyDetailsState.deathPenalty
     local current = GetTime() - self.timerState.startTime 
     local currentWithOffset = current + self.timerState.startOffset
     self:PrintDebug("Current: " .. current .. ", " .. WarpDeplete.Util.formatTime(current))
