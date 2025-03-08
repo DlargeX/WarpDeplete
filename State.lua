@@ -131,7 +131,7 @@ end
 ---@param mapId integer
 function WarpDeplete:SetKeyDetails(level, hasChallengersPeril, affixes, affixIds, mapId)
 	self.state.level = level
-	self.state.deathPenalty = hasChallengersPeril and 15 or 5
+	self.state.deathPenalty = (level <= 3 and 0) or (hasChallengersPeril and 15) or 5
 	self.state.hasChallengersPeril = hasChallengersPeril
 	self.state.affixes = affixes
 	self.state.affixIds = affixIds
@@ -153,7 +153,7 @@ function WarpDeplete:LoadKeyDetails()
 
 	local level, affixes = C_ChallengeMode.GetActiveKeystoneInfo()
 
-	if not level or level <= 0 or #affixes <= 0 then
+	if not level or level <= 0 then
 		return
 	end
 
@@ -196,6 +196,9 @@ function WarpDeplete:GetEJObjectiveNames()
 	end
 
 	local result = {}
+
+	-- EJ_GetEncounterInfoByIndex requires EJ_SelectInstance to be called at least once during the session when passing a journalInstanceID to not return nil
+	EJ_SelectInstance(1267)
 
 	-- There are never more than 20 objectives
 	-- (probably way less, but let's be safe here)
